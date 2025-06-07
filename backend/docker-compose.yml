@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  findsafety-api:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - MONGODB_URI=${MONGODB_URI}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - FLASK_ENV=production
+    volumes:
+      - .:/app
+    restart: unless-stopped
+
+  alert-processor:
+    build: .
+    command: python alert_processor.py
+    environment:
+      - MONGODB_URI=${MONGODB_URI}
+      - EMAIL_USER=${EMAIL_USER}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER}
+    volumes:
+      - .:/app
+    restart: unless-stopped
+    depends_on:
+      - findsafety-api

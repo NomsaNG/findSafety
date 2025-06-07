@@ -1,0 +1,647 @@
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from pymongo import MongoClient
+from pymongo.operations import SearchIndexModel
+from datetime import datetime, timedelta, timezone
+import os
+from dotenv import load_dotenv
+# import openai
+from google import genai
+from google.generativeai import GenerativeModel
+from sentence_transformers import SentenceTransformer
+import numpy as np
+from bson import ObjectId
+import json
+from typing import List, Dict, Any
+from dateutil.parser import parse
+
+
+# Load environment variables
+load_dotenv()
+
+app = Flask(__name__)
+CORS(app)
+
+# MongoDB Atlas connection
+MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb+srv://nomsa:simplepassword@cluster0.obnp1dw.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0')
+client = MongoClient(MONGODB_URI)
+db = client['findsafety']
+
+# Collections
+crimes_collection = db['crimes']
+alerts_collection = db['alerts']
+users_collection = db['users']
+
+# Initialize sentence transformer for vector embeddings
+model = SentenceTransformer('all-MiniLM-L6-v2')
+
+# OpenAI API key for chat functionality
+gemini_key = os.getenv('GEMINI_API_KEY')
+
+client = genai.Client(api_key=gemini_key)
+
+class JSONEncoder(json.JSONEncoder):
+    """Custom JSON encoder to handle ObjectId and datetime objects"""
+    def default(self, obj):
+        if isinstance(obj, ObjectId):
+            return str(obj)
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
+
+app.json_encoder = JSONEncoder
+
+def create_search_indexes():
+    """Create vector search indexes for MongoDB Atlas"""
+    try:
+        # Vector search index for crime descriptions
+        vector_index = SearchIndexModel(
+            definition={
+                "fields": [
+                    {
+                        "type": "vector",
+                        "path": "description_vector",
+                        "numDimensions": 384,  # Dimension for all-MiniLM-L6-v2
+                        "similarity": "cosine"
+                    }
+                ]
+            },
+            name="crime_vector_index"
+        )
+        
+        # Text search index for general search
+        text_index = SearchIndexModel(
+            definition={
+                "mappings": {
+                    "dynamic": False,
+                    "fields": {
+                        "description": {"type": "string"},
+                        "location.address": {"type": "string"},
+                        "type": {"type": "string"}
+                    }
+                }
+            },
+            name="crime_text_index"
+        )
+        
+        # crimes_collection.create_search_indexes([vector_index, text_index])
+        print("Search indexes created successfully")
+    except Exception as e:
+        print(f"Error creating search indexes: {e}")
+
+def generate_embedding(text: str) -> List[float]:
+    """Generate vector embedding for text using sentence transformer"""
+    embedding = model.encode(text)
+    return embedding.tolist()
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Health check endpoint"""
+    return jsonify({"status": "healthy", "timestamp": datetime.utcnow()})
+
+def convert_objectid(doc):
+    if isinstance(doc, list):
+        return [convert_objectid(d) for d in doc]
+    if isinstance(doc, dict):
+        return {k: str(v) if isinstance(v, ObjectId) else v for k, v in doc.items()}
+    return doc
+
+@app.route('/api/crimes', methods=['GET'])
+def get_crimes():
+    try:
+        crime_type = request.args.get('type', 'all')
+        location = request.args.get('location')
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        severity = request.args.get('severity')
+        limit = int(request.args.get('limit', 10))
+
+        query = {}
+
+        if crime_type != 'all':
+            query['type'] = {'$regex': crime_type, '$options': 'i'}
+
+        if location:
+            query['location.address'] = {'$regex': location, '$options': 'i'}
+
+        if severity:
+            query['severity'] = severity
+
+        if start_date and end_date:
+            try:
+                start = parse(start_date)
+                end = parse(end_date)
+                query['date'] = {'$gte': start, '$lte': end}
+            except Exception:
+                return jsonify({"error": "Invalid date format"}), 400
+
+        crimes = list(crimes_collection.find(query).limit(limit).sort('date', -1))
+        crimes = convert_objectid(crimes)
+
+        return jsonify({
+            "crimes": crimes,
+            "total": len(crimes),
+            "query": query
+        })
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/crimes/search', methods=['POST'])
+def search_crimes():
+    """Vector search for crimes using natural language queries"""
+    try:
+        data = request.get_json()
+        query_text = data.get('query', '')
+        limit = data.get('limit', 10)
+        
+        if not query_text:
+            return jsonify({"error": "Query text is required"}), 400
+        
+        # Generate embedding for the query
+        query_embedding = generate_embedding(query_text)
+        
+        # Perform vector search
+        pipeline = [
+            {
+                "$vectorSearch": {
+                    "index": "crime_vector_index",
+                    "path": "description_vector",
+                    "queryVector": query_embedding,
+                    "numCandidates": 100,
+                    "limit": limit
+                }
+            },
+            {
+                "$project": {
+                    "_id": 1,
+                    "type": 1,
+                    "description": 1,
+                    "location": 1,
+                    "date": 1,
+                    "severity": 1,
+                    "score": {"$meta": "vectorSearchScore"}
+                }
+            }
+        ]
+        
+        results = list(crimes_collection.aggregate(pipeline))
+        
+        return jsonify({
+            "results": results,
+            "query": query_text,
+            "total": len(results)
+        })
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/crimes/stats', methods=['GET'])
+def get_crime_stats():
+    """Get crime statistics"""
+    try:
+        # Get date range (default to last 30 days)
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=30)
+        
+        # Aggregate crime statistics
+        pipeline = [
+            {
+                "$match": {
+                    "date": {"$gte": start_date, "$lte": end_date}
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$type",
+                    "count": {"$sum": 1},
+                    "severity_breakdown": {
+                        "$push": "$severity"
+                    }
+                }
+            },
+            {
+                "$project": {
+                    "type": "$_id",
+                    "count": 1,
+                    "high_severity": {
+                        "$size": {
+                            "$filter": {
+                                "input": "$severity_breakdown",
+                                "cond": {"$eq": ["$$this", "High"]}
+                            }
+                        }
+                    },
+                    "medium_severity": {
+                        "$size": {
+                            "$filter": {
+                                "input": "$severity_breakdown",
+                                "cond": {"$eq": ["$$this", "Medium"]}
+                            }
+                        }
+                    },
+                    "low_severity": {
+                        "$size": {
+                            "$filter": {
+                                "input": "$severity_breakdown",
+                                "cond": {"$eq": ["$$this", "Low"]}
+                            }
+                        }
+                    }
+                }
+            }
+        ]
+        
+        stats = list(crimes_collection.aggregate(pipeline))
+        
+        # Calculate trends (compare with previous period)
+        prev_start_date = start_date - timedelta(days=30)
+        prev_pipeline = [
+            {
+                "$match": {
+                    "date": {"$gte": prev_start_date, "$lte": start_date}
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$type",
+                    "count": {"$sum": 1}
+                }
+            }
+        ]
+        
+        prev_stats = list(crimes_collection.aggregate(prev_pipeline))
+        prev_counts = {stat['_id']: stat['count'] for stat in prev_stats}
+        
+        # Add trend information
+        for stat in stats:
+            crime_type = stat['type']
+            current_count = stat['count']
+            prev_count = prev_counts.get(crime_type, 0)
+            
+            if prev_count > 0:
+                change = ((current_count - prev_count) / prev_count) * 100
+            else:
+                change = 100 if current_count > 0 else 0
+            
+            stat['change_percentage'] = round(change, 1)
+        
+        return jsonify({
+            "stats": stats,
+            "period": {
+                "start": start_date,
+                "end": end_date
+            }
+        })
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/crimes/trends', methods=['GET'])
+def get_crime_trends():
+    """Get crime trends over time"""
+    try:
+        # Get the last 6 months of data
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=180)
+        
+        pipeline = [
+            {
+                "$match": {
+                    "date": {"$gte": start_date, "$lte": end_date}
+                }
+            },
+            {
+                "$group": {
+                    "_id": {
+                        "year": {"$year": "$date"},
+                        "month": {"$month": "$date"},
+                        "type": "$type"
+                    },
+                    "count": {"$sum": 1}
+                }
+            },
+            {
+                "$group": {
+                    "_id": {
+                        "year": "$_id.year",
+                        "month": "$_id.month"
+                    },
+                    "crimes": {
+                        "$push": {
+                            "type": "$_id.type",
+                            "count": "$count"
+                        }
+                    }
+                }
+            },
+            {
+                "$sort": {
+                    "_id.year": 1,
+                    "_id.month": 1
+                }
+            }
+        ]
+        
+        trends = list(crimes_collection.aggregate(pipeline))
+        
+        return jsonify({
+            "trends": trends,
+            "period": {
+                "start": start_date,
+                "end": end_date
+            }
+        })
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/crimes/heatmap', methods=['GET'])
+def get_heatmap_data():
+    """Get crime data for heatmap visualization"""
+    try:
+        # Get query parameters
+        crime_type = request.args.get('type', 'all')
+        days = int(request.args.get('days', 30))
+        
+        # Calculate date range
+        end_date = datetime.now(timezone.utc)
+        print("End Date:", end_date)  # Log the end date
+        start_date = end_date - timedelta(days=days)
+        print("Start Date:", start_date)  # Log the start date
+        
+        # Build query
+        query = {
+            "date": {"$gte": start_date, "$lte": end_date}
+        }
+        
+        if crime_type != 'all':
+            query['type'] = {'$regex': crime_type, '$options': 'i'}
+        
+        # Get crimes with location data
+        crimes = list(crimes_collection.find(
+            query,
+            {
+                "location.lat": 1,
+                "location.lng": 1,
+                "type": 1,
+                "severity": 1,
+                "date": 1
+            }
+        ))
+        
+        # Format for heatmap
+        heatmap_data = []
+        for crime in crimes:
+            print("Processing Crime:", crime)  # Log each crime being processed
+            if 'location' in crime and 'lat' in crime['location'] and 'lng' in crime['location']:
+                # Weight based on severity
+                weight = 1
+                if crime.get('severity') == 'High':
+                    weight = 3
+                elif crime.get('severity') == 'Medium':
+                    weight = 2
+                
+                heatmap_data.append({
+                    "lat": crime['location']['lat'],
+                    "lng": crime['location']['lng'],
+                    "weight": weight,
+                    "type": crime.get('type'),
+                    "severity": crime.get('severity'),
+                    "date": crime.get('date')
+                })
+        print("Query:", query)  # Log the query
+        print("Heatmap Data:", heatmap_data)  # Log the heatmap data
+        return jsonify({
+            "heatmap_data": heatmap_data,
+            "total_points": len(heatmap_data),
+            "query": query
+        })
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/chat', methods=['POST'])
+def chat_with_ai():
+    print("POST /api/chat called")  # Log the endpoint call
+    """AI-powered chat interface for crime data queries"""
+    try:
+        print("Parsing request")
+        data = request.get_json()
+        print("Request data:", data)  # Log the request data
+        user_message = data.get('message', '')
+        print("User message:", user_message)  # Log the user message
+        
+        if not user_message:
+            return jsonify({"error": "Message is required"}), 400
+        
+        # Get relevant crime data based on the query
+        print("Generating embedding for user message")
+        query_embedding = generate_embedding(user_message)
+        print("Query embedding generated")  # Log the embedding generation
+        
+        # Search for relevant crimes
+        pipeline = [
+            {
+                "$vectorSearch": {
+                    "index": "crime_vector_index",
+                    "path": "description_vector",
+                    "queryVector": query_embedding,
+                    "numCandidates": 50,
+                    "limit": 5
+                }
+            },
+            {
+                "$project": {
+                    "type": 1,
+                    "description": 1,
+                    "location": 1,
+                    "date": 1,
+                    "severity": 1
+                }
+            }
+        ]
+        print("Running vector search pipeline")  # Log the pipeline execution
+        relevant_crimes = list(crimes_collection.aggregate(pipeline))
+        print("Relevant crimes found:", relevant_crimes)  # Log the results
+
+        # Fetch recent raw scraped data (limit to last 5 posts)
+        recent_scraped_posts = list(raw_scraped_data_collection.find().sort("date", -1).limit(5))
+        # Prepare context for AI
+
+        # Crimes context
+        context += "Recent crimes:\n"
+        for crime in relevant_crimes:
+            context += f"- {crime['type']} in {crime['location']['address']} on {crime['date'].strftime('%Y-%m-%d')}: {crime['description']}\n"
+        # Generate AI response
+        print("Generating AI response")  # Log the AI response generation
+
+        try:
+            model = GenerativeModel('gemini-1.5-flash')
+    
+            prompt = (
+                "You are a helpful assistant that provides information about crime patterns and safety in South Africa. "
+              
+                f"Context: {context}\n\n"
+                f"Question: {user_message}"
+            )
+
+            response = model.generate_content([
+                {"role": "user", "parts": [{"text": prompt}]}
+            ])
+
+            ai_response = response.text
+            print("AI Response:", ai_response)  # Log the AI response
+        except Exception as gemini_error:
+            print("Gemini API error:", gemini_error)
+            return jsonify({"error": "Failed to generate AI response"}), 500
+        
+        return jsonify({
+            "response": ai_response,
+            "relevant_crimes": relevant_crimes,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/alerts', methods=['GET'])
+def get_alerts():
+    """Get user alerts"""
+    try:
+        user_id = request.args.get('user_id', 'default_user')
+        
+        alerts = list(alerts_collection.find({"user_id": user_id}))
+        
+        return jsonify({
+            "alerts": alerts,
+            "total": len(alerts)
+        })
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/alerts', methods=['POST'])
+def create_alert():
+    """Create a new alert"""
+    try:
+        data = request.get_json()
+        
+        alert = {
+            "user_id": data.get('user_id', 'default_user'),
+            "name": data.get('name'),
+            "location": data.get('location'),
+            "radius": data.get('radius', 5),
+            "crime_types": data.get('crime_types', []),
+            "severity_levels": data.get('severity_levels', ['High', 'Medium', 'Low']),
+            "notification_channels": data.get('notification_channels', ['email']),
+            "frequency": data.get('frequency', 'daily'),
+            "active": data.get('active', True),
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+        
+        result = alerts_collection.insert_one(alert)
+        alert['_id'] = result.inserted_id
+        
+        return jsonify({
+            "alert": alert,
+            "message": "Alert created successfully"
+        }), 201
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/alerts/<alert_id>', methods=['PUT'])
+def update_alert(alert_id):
+    """Update an existing alert"""
+    try:
+        data = request.get_json()
+        
+        update_data = {
+            "updated_at": datetime.utcnow()
+        }
+        
+        # Add fields that can be updated
+        updatable_fields = ['name', 'location', 'radius', 'crime_types', 'severity_levels', 
+                           'notification_channels', 'frequency', 'active']
+        
+        for field in updatable_fields:
+            if field in data:
+                update_data[field] = data[field]
+        
+        result = alerts_collection.update_one(
+            {"_id": ObjectId(alert_id)},
+            {"$set": update_data}
+        )
+        
+        if result.matched_count == 0:
+            return jsonify({"error": "Alert not found"}), 404
+        
+        updated_alert = alerts_collection.find_one({"_id": ObjectId(alert_id)})
+        
+        return jsonify({
+            "alert": updated_alert,
+            "message": "Alert updated successfully"
+        })
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/alerts/<alert_id>', methods=['DELETE'])
+def delete_alert(alert_id):
+    """Delete an alert"""
+    try:
+        result = alerts_collection.delete_one({"_id": ObjectId(alert_id)})
+        
+        if result.deleted_count == 0:
+            return jsonify({"error": "Alert not found"}), 404
+        
+        return jsonify({"message": "Alert deleted successfully"})
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/data/import', methods=['POST'])
+def import_crime_data():
+    """Import crime data (for data ingestion)"""
+    try:
+        data = request.get_json()
+        crimes = data.get('crimes', [])
+        
+        # Process each crime record
+        processed_crimes = []
+        for crime in crimes:
+            # Generate vector embedding for description
+            if 'description' in crime:
+                crime['description_vector'] = generate_embedding(crime['description'])
+            
+            # Ensure proper date format
+            if 'date' in crime and isinstance(crime['date'], str):
+                crime['date'] = datetime.fromisoformat(crime['date'])
+            
+            # Add metadata
+            crime['imported_at'] = datetime.utcnow()
+            
+            processed_crimes.append(crime)
+        
+        # Insert into database
+        if processed_crimes:
+            result = crimes_collection.insert_many(processed_crimes)
+            
+            return jsonify({
+                "message": f"Successfully imported {len(result.inserted_ids)} crime records",
+                "inserted_ids": [str(id) for id in result.inserted_ids]
+            })
+        else:
+            return jsonify({"message": "No crimes to import"})
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == '__main__':
+    # Create search indexes on startup
+    create_search_indexes()
+    
+    # Run the Flask app
+    app.run(debug=True, host='0.0.0.0', port=5000)
