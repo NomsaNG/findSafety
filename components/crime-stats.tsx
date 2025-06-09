@@ -32,7 +32,15 @@ const defaultStats = [
   },
 ]
 
-export function CrimeStats() {
+interface CrimeStatsProps {
+  filters?: {
+    location?: string
+    start_date?: string
+    end_date?: string
+  }
+}
+
+export function CrimeStats({ filters = {} }: CrimeStatsProps) {
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<any[]>([])
   const { toast } = useToast()
@@ -42,7 +50,11 @@ export function CrimeStats() {
     const fetchStats = async () => {
       try {
         setLoading(true)
-        const response = await crimeAPI.getStats()
+        const response = await crimeAPI.getStats(filters)
+
+        if (!response || !response.stats) {
+          throw new Error("Invalid response from API")
+        }
 
         // Transform API response to our component format
         const formattedStats = response.stats.map((stat) => {
@@ -83,7 +95,7 @@ export function CrimeStats() {
         console.error("Error fetching crime stats:", error)
         toast({
           title: "Error loading statistics",
-          description: "Could not load crime statistics",
+          description: error instanceof Error ? error.message : "Could not load crime statistics. Please try again later.",
           variant: "destructive",
         })
         setStats(defaultStats)
@@ -93,7 +105,7 @@ export function CrimeStats() {
     }
 
     fetchStats()
-  }, [toast])
+  }, [toast, filters?.location, filters?.start_date, filters?.end_date])
 
   // Calculate max count for relative progress bars
   const maxCount = Math.max(...stats.map((stat) => stat.count), 1)

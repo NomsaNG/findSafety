@@ -4,17 +4,21 @@
  */
 
 // Use the API proxy in development to avoid CORS issues
-const useApiProxy = process.env.NODE_ENV === "development"
+const useApiProxy = false;
 const API_BASE_URL = useApiProxy ? "/api/proxy" : process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"
 
 /**
- * Generic fetch wrapper with error handling
+ * Generic fetch wrapper with error handling and authentication
  */
 async function fetchAPI<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`
 
+  // Get token from localStorage if available
+  const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
+
   const headers = {
     "Content-Type": "application/json",
+    ...(token && { Authorization: `Bearer ${token}` }),
     ...options.headers,
   }
 
@@ -24,6 +28,18 @@ async function fetchAPI<T>(endpoint: string, options: RequestInit = {}): Promise
   })
 
   if (!response.ok) {
+    // Handle authentication errors
+    if (response.status === 401 && typeof window !== "undefined") {
+      // Token expired or invalid, clear local storage
+      localStorage.removeItem("auth_token")
+      localStorage.removeItem("user_data")
+
+      // Redirect to login if not already on auth page
+      if (!window.location.pathname.startsWith("/auth")) {
+        window.location.href = "/auth/signin"
+      }
+    }
+
     // Try to get error message from response
     let errorMessage
     try {
@@ -47,8 +63,8 @@ export const crimeAPI = {
   getCrimes: async (params: {
     type?: string
     location?: string
-    startDate?: string
-    endDate?: string
+    start_date?: string
+    end_date?: string
     severity?: string
     limit?: number
   }) => {
@@ -56,8 +72,8 @@ export const crimeAPI = {
 
     if (params.type) queryParams.append("type", params.type)
     if (params.location) queryParams.append("location", params.location)
-    if (params.startDate) queryParams.append("start_date", params.startDate)
-    if (params.endDate) queryParams.append("end_date", params.endDate)
+    if (params.start_date) queryParams.append("start_date", params.start_date)
+    if (params.end_date) queryParams.append("end_date", params.end_date)
     if (params.severity) queryParams.append("severity", params.severity)
     if (params.limit) queryParams.append("limit", params.limit.toString())
 
@@ -81,31 +97,61 @@ export const crimeAPI = {
   },
 
   // Get crime statistics
-  getStats: async () => {
+  getStats: async (
+    params: {
+      location?: string
+      start_date?: string
+      end_date?: string
+    } = {},
+  ) => {
+    const queryParams = new URLSearchParams()
+
+    if (params.location) queryParams.append("location", params.location)
+    if (params.start_date) queryParams.append("start_date", params.start_date)
+    if (params.end_date) queryParams.append("end_date", params.end_date)
+
     return fetchAPI<{
       stats: any[]
       period: { start: string; end: string }
-    }>("/crimes/stats")
+    }>(`/crimes/stats?${queryParams.toString()}`)
   },
 
   // Get crime trends over time
-  getTrends: async () => {
+  getTrends: async (
+    params: {
+      location?: string
+      start_date?: string
+      end_date?: string
+    } = {},
+  ) => {
+    const queryParams = new URLSearchParams()
+
+    if (params.location) queryParams.append("location", params.location)
+    if (params.start_date) queryParams.append("start_date", params.start_date)
+    if (params.end_date) queryParams.append("end_date", params.end_date)
+
     return fetchAPI<{
       trends: any[]
       period: { start: string; end: string }
-    }>("/crimes/trends")
+    }>(`/crimes/trends?${queryParams.toString()}`)
   },
 
   // Get heatmap data
   getHeatmapData: async (
     params: {
       type?: string
+      location?: string
+      start_date?: string
+      end_date?: string
       days?: number
     } = {},
   ) => {
     const queryParams = new URLSearchParams()
 
     if (params.type) queryParams.append("type", params.type)
+    if (params.location) queryParams.append("location", params.location)
+    if (params.start_date) queryParams.append("start_date", params.start_date)
+    if (params.end_date) queryParams.append("end_date", params.end_date)
     if (params.days) queryParams.append("days", params.days.toString())
 
     return fetchAPI<{
@@ -137,11 +183,11 @@ export const chatAPI = {
  */
 export const alertsAPI = {
   // Get user alerts
-  getAlerts: async (userId = "default_user") => {
+  getAlerts: async () => {
     return fetchAPI<{
       alerts: any[]
       total: number
-    }>(`/alerts?user_id=${userId}`)
+    }>("/alerts")
   },
 
   // Create new alert

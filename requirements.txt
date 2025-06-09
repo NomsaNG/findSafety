@@ -61,3 +61,6 @@ feedparser==6.0.10
 newspaper3k==0.2.8
 snscrape==0.7.0.20230622
 lxml==4.9.3
+
+PyJWT==2.8.0
+bcrypt==4.0.1

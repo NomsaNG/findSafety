@@ -16,22 +16,32 @@ export default function DashboardPage() {
 
   // Check API connection on page load
   useEffect(() => {
+    let isMounted = true; // Prevent state updates if the component is unmounted
+
     const checkApiConnection = async () => {
       try {
         await healthAPI.check()
-        setApiStatus("connected")
+        if (isMounted) {
+          setApiStatus("connected")
+        }
       } catch (error) {
         console.error("API connection error:", error)
-        setApiStatus("error")
-        toast({
-          title: "Connection Error",
-          description: "Could not connect to the FindSafety API. Some features may be limited.",
-          variant: "destructive",
-        })
+        if (isMounted) {
+          setApiStatus("error")
+          toast({
+            title: "Connection Error",
+            description: "Could not connect to the FindSafety API. Some features may be limited.",
+            variant: "destructive",
+          })
+        }
       }
     }
 
     checkApiConnection()
+
+    return () => {
+      isMounted = false // Cleanup to avoid setting state on unmounted component
+    }
   }, [toast])
 
   return (

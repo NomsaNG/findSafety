@@ -44,6 +44,7 @@
     "date-fns": "latest",
     "embla-carousel-react": "8.5.1",
     "input-otp": "1.4.1",
+    "lodash": "^4.17.21",
     "lucide-react": "^0.454.0",
     "mapbox-gl": "latest",
     "next": "15.2.4",
@@ -61,6 +62,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/lodash": "^4.17.17",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",

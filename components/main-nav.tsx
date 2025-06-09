@@ -1,15 +1,22 @@
+"use client"
+
 import Link from "next/link"
-import { Shield } from "lucide-react"
+import { Shield, LogOut } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ModeToggle } from "./mode-toggle"
 import { Button } from "./ui/button"
 import { ApiStatusIndicator } from "./api-status-indicator"
+import { authAPI } from "@/lib/auth-service"
 
 interface MainNavProps {
   className?: string
 }
 
 export function MainNav({ className }: MainNavProps) {
+  const handleSignOut = () => {
+    authAPI.logout()
+  }
+
   return (
     <div className={cn("flex items-center space-x-4 lg:space-x-6", className)}>
       <Link href="/dashboard" className="flex items-center space-x-2">
@@ -33,7 +40,8 @@ export function MainNav({ className }: MainNavProps) {
       <div className="ml-auto flex items-center space-x-4">
         <ApiStatusIndicator />
         <ModeToggle />
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" onClick={handleSignOut}>
+          <LogOut className="h-4 w-4 mr-2" />
           Sign Out
         </Button>
       </div>
