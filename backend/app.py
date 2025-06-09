@@ -15,6 +15,11 @@ import json
 from typing import List, Dict, Any
 from dateutil.parser import parse
 
+# Import authentication module
+from auth import (
+    register_user, login_user, get_user_profile, update_user_profile,
+    require_auth
+)
 
 # Load environment variables
 load_dotenv()
@@ -94,6 +99,72 @@ def generate_embedding(text: str) -> List[float]:
     embedding = model.encode(text)
     return embedding.tolist()
 
+# Authentication routes
+@app.route('/api/auth/register', methods=['POST'])
+def register():
+    """User registration endpoint"""
+    try:
+        data = request.get_json()
+        
+        email = data.get('email')
+        password = data.get('password')
+        first_name = data.get('first_name')
+        last_name = data.get('last_name')
+        
+        result = register_user(email, password, first_name, last_name)
+        
+        return jsonify(result), 201
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    """User login endpoint"""
+    try:
+        data = request.get_json()
+        
+        email = data.get('email')
+        password = data.get('password')
+        
+        result = login_user(email, password)
+        
+        return jsonify(result), 200
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 401
+
+@app.route('/api/auth/profile', methods=['GET'])
+@require_auth
+def get_profile():
+    """Get user profile endpoint"""
+    try:
+        user_id = str(request.current_user['_id'])
+        profile = get_user_profile(user_id)
+        
+        return jsonify({"user": profile}), 200
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route('/api/auth/profile', methods=['PUT'])
+@require_auth
+def update_profile():
+    """Update user profile endpoint"""
+    try:
+        data = request.get_json()
+        user_id = str(request.current_user['_id'])
+        
+        updated_profile = update_user_profile(user_id, data)
+        
+        return jsonify({
+            "user": updated_profile,
+            "message": "Profile updated successfully"
+        }), 200
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
@@ -122,18 +193,25 @@ def get_crimes():
             query['type'] = {'$regex': crime_type, '$options': 'i'}
 
         if location:
-            query['location.address'] = {'$regex': location, '$options': 'i'}
-
+            # Search in multiple location fields
+            query['$or'] = [
+                {'location.address': {'$regex': location, '$options': 'i'}},
+                {'location.city': {'$regex': location, '$options': 'i'}},
+                {'location.province': {'$regex': location, '$options': 'i'}}
+            ]
+            
         if severity:
             query['severity'] = severity
 
         if start_date and end_date:
-            try:
-                start = parse(start_date)
-                end = parse(end_date)
-                query['date'] = {'$gte': start, '$lte': end}
-            except Exception:
-                return jsonify({"error": "Invalid date format"}), 400
+            query['date'] = {
+                '$gte': datetime.fromisoformat(start_date.replace('Z', '+00:00')),
+                '$lte': datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            }
+        elif start_date:
+            query['date'] = {'$gte': datetime.fromisoformat(start_date.replace('Z', '+00:00'))}
+        elif end_date:
+            query['date'] = {'$lte': datetime.fromisoformat(end_date.replace('Z', '+00:00'))}
 
         crimes = list(crimes_collection.find(query).limit(limit).sort('date', -1))
         crimes = convert_objectid(crimes)
@@ -201,15 +279,40 @@ def get_crime_stats():
     """Get crime statistics"""
     try:
         # Get date range (default to last 30 days)
-        end_date = datetime.utcnow()
-        start_date = end_date - timedelta(days=30)
-        
+        location = request.args.get('location')
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+
+        # Build base query
+        base_query = {}
+        if location:
+            base_query['$or'] = [
+                {'location.address': {'$regex': location, '$options': 'i'}},
+                {'location.city': {'$regex': location, '$options': 'i'}},
+                {'location.province': {'$regex': location, '$options': 'i'}}
+            ]
+
+        # Default to last 30 days if no date range specified
+        if not start_date and not end_date:
+            end_date_obj = datetime.utcnow()
+            start_date_obj = end_date_obj - timedelta(days=30)
+        else:
+            if start_date:
+                start_date_obj = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            else:
+                start_date_obj = datetime.utcnow() - timedelta(days=30)
+
+            if end_date:
+                end_date_obj = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            else:
+                end_date_obj = datetime.utcnow()
+
+        base_query['date'] = {"$gte": start_date_obj, "$lte": end_date_obj}
+
         # Aggregate crime statistics
         pipeline = [
             {
-                "$match": {
-                    "date": {"$gte": start_date, "$lte": end_date}
-                }
+                "$match": base_query
             },
             {
                 "$group": {
@@ -251,49 +354,17 @@ def get_crime_stats():
                 }
             }
         ]
-        
+
         stats = list(crimes_collection.aggregate(pipeline))
-        
-        # Calculate trends (compare with previous period)
-        prev_start_date = start_date - timedelta(days=30)
-        prev_pipeline = [
-            {
-                "$match": {
-                    "date": {"$gte": prev_start_date, "$lte": start_date}
-                }
-            },
-            {
-                "$group": {
-                    "_id": "$type",
-                    "count": {"$sum": 1}
-                }
-            }
-        ]
-        
-        prev_stats = list(crimes_collection.aggregate(prev_pipeline))
-        prev_counts = {stat['_id']: stat['count'] for stat in prev_stats}
-        
-        # Add trend information
-        for stat in stats:
-            crime_type = stat['type']
-            current_count = stat['count']
-            prev_count = prev_counts.get(crime_type, 0)
-            
-            if prev_count > 0:
-                change = ((current_count - prev_count) / prev_count) * 100
-            else:
-                change = 100 if current_count > 0 else 0
-            
-            stat['change_percentage'] = round(change, 1)
-        
+
         return jsonify({
             "stats": stats,
             "period": {
-                "start": start_date,
-                "end": end_date
+                "start": start_date_obj.isoformat(),
+                "end": end_date_obj.isoformat()
             }
         })
-    
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -301,9 +372,37 @@ def get_crime_stats():
 def get_crime_trends():
     """Get crime trends over time"""
     try:
-        # Get the last 6 months of data
-        end_date = datetime.utcnow()
-        start_date = end_date - timedelta(days=180)
+        # Get query parameters for filtering
+        location = request.args.get('location')
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Build base query
+        base_query = {}
+        
+        if location:
+            base_query['$or'] = [
+                {'location.address': {'$regex': location, '$options': 'i'}},
+                {'location.city': {'$regex': location, '$options': 'i'}},
+                {'location.province': {'$regex': location, '$options': 'i'}}
+            ]
+        
+        # Default to last 6 months if no date range specified
+        if not start_date and not end_date:
+            end_date_obj = datetime.utcnow()
+            start_date_obj = end_date_obj - timedelta(days=180)
+        else:
+            if start_date:
+                start_date_obj = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            else:
+                start_date_obj = datetime.utcnow() - timedelta(days=180)
+            
+            if end_date:
+                end_date_obj = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            else:
+                end_date_obj = datetime.utcnow()
+        
+        base_query['date'] = {"$gte": start_date_obj, "$lte": end_date_obj}
         
         pipeline = [
             {
@@ -362,21 +461,35 @@ def get_heatmap_data():
     try:
         # Get query parameters
         crime_type = request.args.get('type', 'all')
+        location = request.args.get('location')
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
         days = int(request.args.get('days', 30))
         
-        # Calculate date range
-        end_date = datetime.now(timezone.utc)
-        print("End Date:", end_date)  # Log the end date
-        start_date = end_date - timedelta(days=days)
-        print("Start Date:", start_date)  # Log the start date
-        
         # Build query
-        query = {
-            "date": {"$gte": start_date, "$lte": end_date}
-        }
+        query = {}
+        
+        # Date filtering
+        if start_date and end_date:
+            query['date'] = {
+                "$gte": datetime.fromisoformat(start_date.replace('Z', '+00:00')),
+                "$lte": datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            }
+        else:
+            # Default to specified days
+            end_date_obj = datetime.utcnow()
+            start_date_obj = end_date_obj - timedelta(days=days)
+            query['date'] = {"$gte": start_date_obj, "$lte": end_date_obj}
         
         if crime_type != 'all':
             query['type'] = {'$regex': crime_type, '$options': 'i'}
+        
+        if location:
+            query['$or'] = [
+                {'location.address': {'$regex': location, '$options': 'i'}},
+                {'location.city': {'$regex': location, '$options': 'i'}},
+                {'location.province': {'$regex': location, '$options': 'i'}}
+            ]
         
         # Get crimes with location data
         crimes = list(crimes_collection.find(
@@ -506,29 +619,39 @@ def chat_with_ai():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/alerts', methods=['GET'])
+@require_auth
 def get_alerts():
     """Get user alerts"""
     try:
-        user_id = request.args.get('user_id', 'default_user')
-        
+        user_id = str(request.current_user['_id'])  # Retrieve user_id from authenticated session
+
+        # Validate that the user exists
+        user_exists = users_collection.find_one({"_id": ObjectId(user_id)})
+        if not user_exists:
+            return jsonify({"error": "User not found"}), 404
+
         alerts = list(alerts_collection.find({"user_id": user_id}))
-        
+        alerts = convert_objectid(alerts)  # Convert ObjectId fields to strings
+
         return jsonify({
             "alerts": alerts,
             "total": len(alerts)
         })
-    
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/alerts', methods=['POST'])
+@require_auth
 def create_alert():
     """Create a new alert"""
     try:
         data = request.get_json()
-        
+
+        # Retrieve user_id from authenticated session
+        user_id = str(request.current_user['_id'])
+
         alert = {
-            "user_id": data.get('user_id', 'default_user'),
+            "user_id": user_id,
             "name": data.get('name'),
             "location": data.get('location'),
             "radius": data.get('radius', 5),
@@ -540,15 +663,18 @@ def create_alert():
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow()
         }
-        
+
         result = alerts_collection.insert_one(alert)
         alert['_id'] = result.inserted_id
-        
+
+        # Convert ObjectId fields to strings
+        alert = convert_objectid(alert)
+
         return jsonify({
             "alert": alert,
             "message": "Alert created successfully"
         }), 201
-    
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

@@ -16,7 +16,15 @@ const defaultTrendData = [
   { month: "May", violent: 0, property: 0, drug: 0 },
 ]
 
-export function CrimeTrends() {
+interface CrimeTrendsProps {
+  filters?: {
+    location?: string
+    start_date?: string
+    end_date?: string
+  }
+}
+
+export function CrimeTrends({ filters = {} }: CrimeTrendsProps) {
   const [loading, setLoading] = useState(true)
   const [trendData, setTrendData] = useState<any[]>(defaultTrendData)
   const { toast } = useToast()
@@ -26,7 +34,11 @@ export function CrimeTrends() {
     const fetchTrends = async () => {
       try {
         setLoading(true)
-        const response = await crimeAPI.getTrends()
+        const response = await crimeAPI.getTrends(filters)
+
+        if (!response || !response.trends) {
+          throw new Error("Invalid response from API")
+        }
 
         // Transform API response to our component format
         const formattedTrends = response.trends.map((trend) => {
@@ -70,7 +82,7 @@ export function CrimeTrends() {
         console.error("Error fetching crime trends:", error)
         toast({
           title: "Error loading trends",
-          description: "Could not load crime trend data",
+          description: error instanceof Error ? error.message : "Could not load crime trend data",
           variant: "destructive",
         })
         setTrendData(defaultTrendData)
@@ -80,7 +92,7 @@ export function CrimeTrends() {
     }
 
     fetchTrends()
-  }, [toast])
+  }, [toast, filters?.location, filters?.start_date, filters?.end_date])
 
   if (loading) {
     return (

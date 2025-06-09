@@ -7,7 +7,15 @@ import { Loader2 } from "lucide-react"
 import { crimeAPI } from "@/lib/api-service"
 import { useToast } from "./ui/use-toast"
 
-export function RecentCrimes() {
+interface RecentCrimesProps {
+  filters?: {
+    location?: string
+    start_date?: string
+    end_date?: string
+  }
+}
+
+export function RecentCrimes({ filters = {} }: RecentCrimesProps) {
   const [loading, setLoading] = useState(true)
   const [crimes, setCrimes] = useState<any[]>([])
   const { toast } = useToast()
@@ -19,14 +27,19 @@ export function RecentCrimes() {
         setLoading(true)
         const response = await crimeAPI.getCrimes({
           limit: 10,
+          ...filters,
         })
+
+        if (!response || !response.crimes) {
+          throw new Error("Invalid response from API")
+        }
 
         setCrimes(response.crimes)
       } catch (error) {
         console.error("Error fetching recent crimes:", error)
         toast({
           title: "Error loading data",
-          description: "Could not load recent crime incidents",
+          description: error instanceof Error ? error.message : "Could not load recent crime incidents",
           variant: "destructive",
         })
         setCrimes([])
@@ -36,7 +49,7 @@ export function RecentCrimes() {
     }
 
     fetchRecentCrimes()
-  }, [toast])
+  }, [toast, filters?.location, filters?.start_date, filters?.end_date])
 
   // Function to format date
   const formatDate = (dateString: string) => {

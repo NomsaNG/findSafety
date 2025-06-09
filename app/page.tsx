@@ -24,9 +24,11 @@ export default function Home() {
                 </Link>
               </li>
               <li>
-                <Button variant="secondary" className="text-primary">
-                  Sign In
-                </Button>
+                <Link href="/auth/signin">
+                  <Button variant="secondary" className="text-primary">
+                    Sign In
+                  </Button>
+                </Link>
               </li>
             </ul>
           </nav>
@@ -40,11 +42,21 @@ export default function Home() {
             <p className="text-xl md:text-2xl mb-10 max-w-3xl mx-auto">
               Explore crime patterns in South Africa with advanced data visualization and AI-powered insights.
             </p>
-            <Button asChild size="lg" variant="secondary" className="text-primary font-semibold">
-              <Link href="/dashboard">
-                Explore Crime Data <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
-            </Button>
+            <div className="flex gap-4 justify-center">
+              <Button asChild size="lg" variant="secondary" className="text-primary font-semibold">
+                <Link href="/auth/signup">
+                  Get Started <ArrowRight className="ml-2 h-5 w-5" />
+                </Link>
+              </Button>
+              <Button
+                asChild
+                size="lg"
+                variant="outline"
+                className="border-white text-white hover:bg-white hover:text-primary"
+              >
+                <Link href="/dashboard">View Demo</Link>
+              </Button>
+            </div>
           </div>
         </section>
 
