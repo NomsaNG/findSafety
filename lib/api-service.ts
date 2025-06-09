@@ -11,32 +11,27 @@ const API_BASE_URL = useApiProxy ? "/api/proxy" : process.env.NEXT_PUBLIC_API_UR
  * Generic fetch wrapper with error handling
  */
 async function fetchAPI<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint}`
-
+  const url = `${API_BASE_URL}${endpoint}`;
   const headers = {
     "Content-Type": "application/json",
     ...options.headers,
-  }
-
+  };
   const response = await fetch(url, {
     ...options,
     headers,
-  })
-
+  });
   if (!response.ok) {
     // Try to get error message from response
-    let errorMessage
+    let errorMessage;
     try {
-      const errorData = await response.json()
-      errorMessage = errorData.error || `API error: ${response.status}`
+      const errorData = await response.json();
+      errorMessage = errorData.error || `API error: ${response.status}`;
     } catch (e) {
-      errorMessage = `API error: ${response.status}`
+      errorMessage = `API error: ${response.status}`;
     }
-
-    throw new Error(errorMessage)
+    throw new Error(`Error fetching ${options.method || 'GET'} ${url}: ${errorMessage}`);
   }
-
-  return response.json()
+  return response.json();
 }
 
 /**

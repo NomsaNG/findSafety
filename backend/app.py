@@ -14,6 +14,8 @@ from bson import ObjectId
 import json
 from typing import List, Dict, Any
 from dateutil.parser import parse
+import firebase_admin
+from firebase_admin import credentials, messaging
 
 
 # Load environment variables
@@ -33,12 +35,28 @@ alerts_collection = db['alerts']
 users_collection = db['users']
 
 # Initialize sentence transformer for vector embeddings
-model = SentenceTransformer('all-MiniLM-L6-v2')
+model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
 
 # OpenAI API key for chat functionality
 gemini_key = os.getenv('GEMINI_API_KEY')
 
 client = genai.Client(api_key=gemini_key)
+
+# Initialize Firebase Admin SDK
+cred = credentials.Certificate("/Users/nomsagoba/Downloads/findsafety/findsafety-c108d-firebase-adminsdk-fbsvc-189248dba5.json")
+firebase_admin.initialize_app(cred)
+
+# Example function to send a push notification
+def send_push_notification(token, title, body):
+    message = messaging.Message(
+        notification=messaging.Notification(
+            title=title,
+            body=body
+        ),
+        token=token
+    )
+    response = messaging.send(message)
+    print("Successfully sent message:", response)
 
 class JSONEncoder(json.JSONEncoder):
     """Custom JSON encoder to handle ObjectId and datetime objects"""
@@ -100,6 +118,7 @@ def health_check():
     return jsonify({"status": "healthy", "timestamp": datetime.utcnow()})
 
 def convert_objectid(doc):
+    """Recursively convert ObjectId fields in a document to strings."""
     if isinstance(doc, list):
         return [convert_objectid(d) for d in doc]
     if isinstance(doc, dict):
@@ -424,22 +443,22 @@ def get_heatmap_data():
 @app.route('/api/chat', methods=['POST'])
 def chat_with_ai():
     print("POST /api/chat called")  # Log the endpoint call
-    """AI-powered chat interface for crime data queries"""
     try:
         print("Parsing request")
         data = request.get_json()
         print("Request data:", data)  # Log the request data
         user_message = data.get('message', '')
         print("User message:", user_message)  # Log the user message
-        
+
         if not user_message:
+            print("Error: Message is required")
             return jsonify({"error": "Message is required"}), 400
-        
+
         # Get relevant crime data based on the query
         print("Generating embedding for user message")
         query_embedding = generate_embedding(user_message)
         print("Query embedding generated")  # Log the embedding generation
-        
+
         # Search for relevant crimes
         pipeline = [
             {
@@ -462,26 +481,34 @@ def chat_with_ai():
             }
         ]
         print("Running vector search pipeline")  # Log the pipeline execution
-        relevant_crimes = list(crimes_collection.aggregate(pipeline))
+        relevant_crimes = list(db['crimes'].find().sort("date", -1).limit(5))
+        relevant_crimes = convert_objectid(relevant_crimes)  # Convert ObjectId fields
         print("Relevant crimes found:", relevant_crimes)  # Log the results
 
         # Fetch recent raw scraped data (limit to last 5 posts)
-        recent_scraped_posts = list(raw_scraped_data_collection.find().sort("date", -1).limit(5))
-        # Prepare context for AI
+        recent_scraped_posts = list(db['raw_scraped_data'].find().sort("date", -1).limit(5))
+        recent_scraped_posts = convert_objectid(recent_scraped_posts)  # Convert ObjectId fields
+        print("Recent scraped posts:", recent_scraped_posts)  # Log the scraped posts
 
-        # Crimes context
-        context += "Recent crimes:\n"
+        # Prepare context for AI
+        context = "Recent crimes:\n"
         for crime in relevant_crimes:
-            context += f"- {crime['type']} in {crime['location']['address']} on {crime['date'].strftime('%Y-%m-%d')}: {crime['description']}\n"
+            context += f"- {crime['type']} in {crime.get('location', {}).get('address', 'unknown location')} on {crime['date'].strftime('%Y-%m-%d')}: {crime['description']}\n"
+
+        context += "\nRecent scraped posts:\n"
+        for post in recent_scraped_posts:
+            context += f"- {post.get('title', 'No title')} on {post.get('date', 'unknown date')}: {post.get('content', 'No content')}\n"
+
+        print("Context prepared for AI:", context)  # Log the context
+
         # Generate AI response
         print("Generating AI response")  # Log the AI response generation
 
         try:
             model = GenerativeModel('gemini-1.5-flash')
-    
+
             prompt = (
                 "You are a helpful assistant that provides information about crime patterns and safety in South Africa. "
-              
                 f"Context: {context}\n\n"
                 f"Question: {user_message}"
             )
@@ -495,14 +522,16 @@ def chat_with_ai():
         except Exception as gemini_error:
             print("Gemini API error:", gemini_error)
             return jsonify({"error": "Failed to generate AI response"}), 500
-        
+
         return jsonify({
             "response": ai_response,
             "relevant_crimes": relevant_crimes,
+            "recent_scraped_posts": recent_scraped_posts,
             "timestamp": datetime.now(timezone.utc).isoformat()
         })
-    
+
     except Exception as e:
+        print("Error in /api/chat:", e)  # Log the error
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/alerts', methods=['GET'])
