@@ -11,8 +11,7 @@ const API_BASE_URL = useApiProxy ? "/api/proxy" : process.env.NEXT_PUBLIC_API_UR
  * Generic fetch wrapper with error handling and authentication
  */
 async function fetchAPI<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint}`
-
+  const url = `${API_BASE_URL}${endpoint}`;
   // Get token from localStorage if available
   const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
 
@@ -20,15 +19,14 @@ async function fetchAPI<T>(endpoint: string, options: RequestInit = {}): Promise
     "Content-Type": "application/json",
     ...(token && { Authorization: `Bearer ${token}` }),
     ...options.headers,
-  }
-
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  })
-
-  if (!response.ok) {
-    // Handle authentication errors
+  };
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+    if (!response.ok) {
+      // Handle authentication errors
     if (response.status === 401 && typeof window !== "undefined") {
       // Token expired or invalid, clear local storage
       localStorage.removeItem("auth_token")
@@ -41,18 +39,20 @@ async function fetchAPI<T>(endpoint: string, options: RequestInit = {}): Promise
     }
 
     // Try to get error message from response
-    let errorMessage
-    try {
-      const errorData = await response.json()
-      errorMessage = errorData.error || `API error: ${response.status}`
-    } catch (e) {
-      errorMessage = `API error: ${response.status}`
+      let errorMessage;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || `API error: ${response.status}`;
+      } catch (e) {
+        errorMessage = `API error: ${response.status}`;
+      }
+      throw new Error(`Error fetching ${options.method || 'GET'} ${url}: ${errorMessage}`);
     }
-
-    throw new Error(errorMessage)
+    return response.json();
+  } catch (error) {
+    console.error(`Error in fetchAPI: ${error.message}`, { endpoint, options });
+    throw error;
   }
-
-  return response.json()
 }
 
 /**

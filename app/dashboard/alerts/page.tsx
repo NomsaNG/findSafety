@@ -15,6 +15,7 @@ import { Bell, Mail, MessageSquare, Plus, Trash2, MapPin, AlertTriangle, CheckCi
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "@/components/ui/use-toast"
 import { alertsAPI } from "@/lib/api-service"
+import { useAuth } from "@/hooks/use-auth" 
 
 // Alert interface
 interface Alert {
@@ -37,6 +38,7 @@ interface Alert {
 }
 
 export default function AlertsPage() {
+  const { user } = useAuth() // Get the logged-in user
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [loading, setLoading] = useState(true)
   const [newAlert, setNewAlert] = useState(false)
@@ -53,9 +55,10 @@ export default function AlertsPage() {
   // Load alerts from API
   useEffect(() => {
     const fetchAlerts = async () => {
+      if (!user?.id) return // Ensure user is logged in
       try {
         setLoading(true)
-        const response = await alertsAPI.getAlerts()
+        const response = await alertsAPI.getAlerts(user.id) // Pass user ID dynamically
         setAlerts(response.alerts)
       } catch (error) {
         console.error("Error fetching alerts:", error)
@@ -64,32 +67,14 @@ export default function AlertsPage() {
           description: "Could not load your alerts. Please try again later.",
           variant: "destructive",
         })
-        // Set some default alerts for UI demonstration if API fails
-        setAlerts([
-          {
-            _id: "1",
-            name: "Home Area Alert",
-            location: {
-              address: "Sandton, Johannesburg",
-            },
-            radius: 5,
-            crime_types: ["Violent", "Property"],
-            severity_levels: ["High", "Medium"],
-            notification_channels: ["email", "sms"],
-            frequency: "daily",
-            active: true,
-            user_id: "default_user",
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-        ])
+        setAlerts([]) // Clear alerts on error
       } finally {
         setLoading(false)
       }
     }
 
     fetchAlerts()
-  }, [])
+  }, [user])
 
   // Function to handle form input changes
   const handleInputChange = (field: string, value: any) => {
@@ -147,11 +132,12 @@ export default function AlertsPage() {
   // Function to handle creating a new alert
   const handleCreateAlert = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!user?.id) return // Ensure user is logged in
 
     try {
       // Prepare alert data
       const alertData = {
-        user_id: "default_user", // In a real app, this would come from authentication
+        user_id: user.id, // Use logged-in user's ID
         name: formData.name || "New Alert",
         location: {
           address: formData.location || "Custom Location",

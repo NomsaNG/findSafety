@@ -49,6 +49,8 @@ export default function ChatPage() {
   const handleSendMessage = async () => {
     if (!input.trim() || isLoading) return
 
+    console.log("Sending message:", input) // Log the user input
+
     // Add user message
     const userMessage: Message = {
       id: messages.length + 1,
@@ -62,8 +64,8 @@ export default function ChatPage() {
       id: messages.length + 2,
       role: "assistant",
       content: "",
-      timestamp: new Date().toISOString(),
       isLoading: true,
+      timestamp: new Date().toISOString(),
     }
 
     setMessages([...messages, userMessage, loadingMessage])
@@ -72,7 +74,9 @@ export default function ChatPage() {
 
     try {
       // Send message to API
+      console.log("Calling chatAPI.sendMessage")
       const response = await chatAPI.sendMessage(input)
+      console.log("API response received:", response) // Log the API response
 
       // Replace loading message with actual response
       setMessages((prevMessages) =>
@@ -88,7 +92,7 @@ export default function ChatPage() {
         ),
       )
     } catch (error) {
-      console.error("Error sending message:", error)
+      console.error("Error sending message:", error) // Log the error
 
       // Replace loading message with error
       setMessages((prevMessages) =>
