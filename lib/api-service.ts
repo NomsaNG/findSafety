@@ -50,7 +50,11 @@ async function fetchAPI<T>(endpoint: string, options: RequestInit = {}): Promise
     }
     return response.json();
   } catch (error) {
-    console.error(`Error in fetchAPI: ${error.message}`, { endpoint, options });
+    if (error instanceof Error) {
+      console.error(`Error in fetchAPI: ${error.message}`, { endpoint, options });
+    } else {
+      console.error(`Unknown error in fetchAPI`, { endpoint, options, error });
+    }
     throw error;
   }
 }

@@ -32,7 +32,7 @@ export const requestNotificationPermission = async () => {
       console.error("Notification permission has been blocked by the user.");
       return;
     }
-    const token = await getToken(messaging, { vapidKey: 'YOUR_VAPID_KEY' });
+    const token = await getToken(messaging, { vapidKey: 'BKwbQvPYoLai6IUt2B0D-xdJARhE93UbJDI6cH4lxOqC7HIkyR_r8erpiYeH8IbqCTCXCMUScZw_tilXHW--6b4' });
     if (token) {
       console.log('Notification permission granted. Token:', token);
       // Send the token to your server to save it

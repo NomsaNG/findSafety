@@ -1,6 +1,6 @@
 "use client"
 
-import type React from "react"
+import React from "react"
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,7 +15,7 @@ import { Bell, Mail, MessageSquare, Plus, Trash2, MapPin, AlertTriangle, CheckCi
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "@/components/ui/use-toast"
 import { alertsAPI } from "@/lib/api-service"
-import { useAuth } from "@/hooks/use-auth" 
+
 
 // Alert interface
 interface Alert {
@@ -38,7 +38,12 @@ interface Alert {
 }
 
 export default function AlertsPage() {
-  const { user } = useAuth() // Get the logged-in user
+  // Check if localStorage is available
+  const user = React.useMemo(() => {
+    return typeof window !== 'undefined' ? JSON.parse(localStorage.getItem("user_data") || "{}") : {};
+  }, []);
+  console.log("Retrieved user from localStorage:", user); // Debugging log
+
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [loading, setLoading] = useState(true)
   const [newAlert, setNewAlert] = useState(false)
@@ -55,25 +60,33 @@ export default function AlertsPage() {
   // Load alerts from API
   useEffect(() => {
     const fetchAlerts = async () => {
-      if (!user?.id) return // Ensure user is logged in
       try {
-        setLoading(true)
-        const response = await alertsAPI.getAlerts(user.id) // Pass user ID dynamically
-        setAlerts(response.alerts)
+        if (!user?._id) {
+          console.log("User ID is missing, stopping fetchAlerts"); // Debugging log
+          setLoading(false); // Stop loading if user ID is missing
+          return;
+        }
+        setLoading(true);
+        console.log("Fetching alerts from API..."); // Debugging log
+        const response = await alertsAPI.getAlerts();
+        console.log("API response:", response); // Debugging log
+        if (!response || !response.alerts) {
+          throw new Error("Invalid response from API");
+        }
+        setAlerts(response.alerts);
       } catch (error) {
-        console.error("Error fetching alerts:", error)
+        console.error("Error fetching alerts:", error); // Debugging log
         toast({
           title: "Error loading alerts",
           description: "Could not load your alerts. Please try again later.",
           variant: "destructive",
-        })
-        setAlerts([]) // Clear alerts on error
+        });
+        setAlerts([]); // Clear alerts on error
       } finally {
-        setLoading(false)
+        setLoading(false); // Ensure loading is stopped
       }
-    }
-
-    fetchAlerts()
+    };
+    fetchAlerts();
   }, [user])
 
   // Function to handle form input changes
@@ -131,13 +144,16 @@ export default function AlertsPage() {
 
   // Function to handle creating a new alert
   const handleCreateAlert = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!user?.id) return // Ensure user is logged in
-
+    e.preventDefault();
+    console.log("Create Alert button clicked"); // Debugging log
+    if (!user?._id) {
+      console.log("User not logged in"); // Debugging log
+      return;
+    }
     try {
-      // Prepare alert data
+      console.log("Preparing alert data", formData); // Debugging log
       const alertData = {
-        user_id: user.id, // Use logged-in user's ID
+        user_id: user._id, // Use logged-in user's ID
         name: formData.name || "New Alert",
         location: {
           address: formData.location || "Custom Location",
@@ -148,26 +164,25 @@ export default function AlertsPage() {
         notification_channels: formData.notification_channels,
         frequency: formData.frequency,
         active: formData.active,
-      }
-
-      const response = await alertsAPI.createAlert(alertData)
-      setAlerts([...alerts, response.alert])
-      setNewAlert(false)
-      resetForm()
-
+      };
+      console.log("Sending alert data to API", alertData); // Debugging log
+      const response = await alertsAPI.createAlert(alertData);
+      console.log("API response", response); // Debugging log
+      setAlerts([...alerts, response.alert]);
+      setNewAlert(false);
+      resetForm();
       toast({
         title: "Alert created",
         description: "Your new alert has been successfully created.",
-      })
+      });
     } catch (error) {
-      console.error("Error creating alert:", error)
+      console.error("Error creating alert", error); // Debugging log
       toast({
         title: "Error",
         description: "Could not create the alert. Please try again.",
-        variant: "destructive",
-      })
+      });
     }
-  }
+  };
 
   // Reset form to default values
   const resetForm = () => {
