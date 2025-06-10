@@ -17,6 +17,11 @@ from dateutil.parser import parse
 import firebase_admin
 from firebase_admin import credentials, messaging
 
+# Import authentication module
+from auth import (
+    register_user, login_user, get_user_profile, update_user_profile,
+    require_auth
+)
 
 # Load environment variables
 load_dotenv()

@@ -26,8 +26,12 @@ export const requestNotificationPermission = async () => {
     console.warn("Firebase messaging is not initialized in this environment.");
     return;
   }
-
   try {
+    const permission = Notification.permission;
+    if (permission === "denied") {
+      console.error("Notification permission has been blocked by the user.");
+      return;
+    }
     const token = await getToken(messaging, { vapidKey: 'YOUR_VAPID_KEY' });
     if (token) {
       console.log('Notification permission granted. Token:', token);

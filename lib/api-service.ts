@@ -16,22 +16,27 @@ async function fetchAPI<T>(endpoint: string, options: RequestInit = {}): Promise
     "Content-Type": "application/json",
     ...options.headers,
   };
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
-  if (!response.ok) {
-    // Try to get error message from response
-    let errorMessage;
-    try {
-      const errorData = await response.json();
-      errorMessage = errorData.error || `API error: ${response.status}`;
-    } catch (e) {
-      errorMessage = `API error: ${response.status}`;
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+    if (!response.ok) {
+      // Try to get error message from response
+      let errorMessage;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || `API error: ${response.status}`;
+      } catch (e) {
+        errorMessage = `API error: ${response.status}`;
+      }
+      throw new Error(`Error fetching ${options.method || 'GET'} ${url}: ${errorMessage}`);
     }
-    throw new Error(`Error fetching ${options.method || 'GET'} ${url}: ${errorMessage}`);
+    return response.json();
+  } catch (error) {
+    console.error(`Error in fetchAPI: ${error.message}`, { endpoint, options });
+    throw error;
   }
-  return response.json();
 }
 
 /**
