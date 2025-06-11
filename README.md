@@ -60,19 +60,19 @@ The project is organized into the following main directories:
 
 3. Configure environment variables:
    ```bash
-   Add Firebase credentials to findsafety-c108d-firebase-adminsdk-fbsvc-189248dba5.json.
-   Set up .env files for both frontend and backend.
-  ```
+      Add Firebase credentials to findsafety-c108d-firebase-adminsdk-fbsvc-189248dba5.json.
+      Set up .env files for both frontend and backend.
+   ```
 
-Usage
-Frontend
-Start the Next.js development server:
+## Usage
+### Frontend
+**Start the Next.js development server:**
 
 ```bash
-  pnpm dev
+   pnpm dev
 ```
-Backend
-Run the Flask backend server:
+### Backend
+**Run the Flask backend server:**
 
 ```bash
   cd backend
