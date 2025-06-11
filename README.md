@@ -42,9 +42,9 @@ The project is organized into the following main directories:
 ### Steps
 1. Clone the repository:
    ```bash
-   git clone <repository-url>
-   cd findsafety
-  ```
+      git clone <repository-url>
+      cd findsafety
+   ```
 
 2. Install frontend dependencies:
    ```bash
@@ -53,9 +53,9 @@ The project is organized into the following main directories:
 
 3. Set up the Python virtual environment:
    ```bash
-    cd besafe
-    source bin/activate
-    pip install -r requirements.txt
+      cd besafe
+      source bin/activate
+      pip install -r requirements.txt
    ```
 
 3. Configure environment variables:
@@ -75,9 +75,9 @@ The project is organized into the following main directories:
 **Run the Flask backend server:**
 
 ```bash
-  cd backend
-  source ../besafe/bin/activate
-  python app.py
+    cd backend
+    source ../besafe/bin/activate
+    python app.py
 ```
 
 ## Technologies Used
