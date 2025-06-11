@@ -1,169 +1,94 @@
-# FindSafety Backend API
+# FindSafety
 
-This is the Python Flask backend for the FindSafety crime data visualization platform.
+FindSafety is a web application designed to provide users with insights into crime trends, statistics, and alerts in their area. It leverages modern web technologies and backend services to deliver a seamless and informative experience.
 
 ## Features
 
-- **Crime Data API**: RESTful endpoints for crime data retrieval and analysis
-- **Vector Search**: Semantic search using MongoDB Atlas Vector Search
-- **AI Chat Interface**: OpenAI-powered chatbot for crime data queries
-- **Alert System**: Location-based crime alerts with email/SMS notifications
-- **Data Ingestion**: Import and process SAPS crime data
+- **Crime Map**: Visualize crime data on an interactive map.
+- **Crime Trends**: Analyze historical crime trends.
+- **Crime Statistics**: View detailed statistics about crimes in specific areas.
+- **Alerts**: Receive notifications about recent crimes.
+- **Dashboard**: A personalized dashboard for exploring crime data and interacting with features like chat and filters.
+- **Community Page**: 
 
-## Setup
+## Project Structure
+
+The project is organized into the following main directories:
+
+### Frontend
+- **`app/`**: Contains the main Next.js application files, including layouts, pages, and API routes.
+- **`components/`**: Reusable React components for UI elements like buttons, charts, and dialogs.
+- **`hooks/`**: Custom React hooks for managing state and behavior.
+- **`lib/`**: Utility functions and services for API and authentication.
+- **`public/`**: Static assets like images and service worker files.
+- **`styles/`**: Global and component-specific styles.
+
+### Backend
+- **`backend/`**: Python-based backend services for data processing, authentication, and scraping.
+- **`besafe/`**: Virtual environment for Python dependencies.
+
+### Configuration Files
+- **`next.config.mjs`**: Next.js configuration.
+- **`tailwind.config.ts`**: Tailwind CSS configuration.
+- **`tsconfig.json`**: TypeScript configuration.
+- **`requirements.txt`**: Python dependencies.
+
+## Installation
 
 ### Prerequisites
+- Node.js and pnpm for the frontend.
+- Python 3.9+ for the backend.
 
-- Python 3.9+
-- MongoDB Atlas cluster with Vector Search enabled
-- OpenAI API key
-- Email service (Gmail/SMTP)
-- Twilio account (for SMS alerts)
+### Steps
+1. Clone the repository:
+   ```bash
+   git clone <repository-url>
+   cd findsafety
+  ```
 
-### Installation
+2. Install frontend dependencies:
+   ```bash
+      pnpm install
+   ```
 
-1. Clone the repository and navigate to the backend directory:
-\`\`\`bash
-cd backend
-\`\`\`
+3. Set up the Python virtual environment:
+   ```bash
+    cd besafe
+    source bin/activate
+    pip install -r requirements.txt
+  ```
 
-2. Create a virtual environment:
-\`\`\`bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-\`\`\`
+3. Configure environment variables:
+   ```bash
+   Add Firebase credentials to findsafety-c108d-firebase-adminsdk-fbsvc-189248dba5.json.
+   Set up .env files for both frontend and backend.
+  ```
 
-3. Install dependencies:
-\`\`\`bash
-pip install -r requirements.txt
-\`\`\`
+Usage
+Frontend
+Start the Next.js development server:
 
-4. Create environment file:
-\`\`\`bash
-cp .env.example .env
-\`\`\`
+```bash
+  pnpm dev
+```
+Backend
+Run the Flask backend server:
 
-5. Configure your `.env` file with the required credentials:
-\`\`\`env
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/findsafety
-OPENAI_API_KEY=your_openai_api_key
-EMAIL_USER=your_email@gmail.com
-EMAIL_PASSWORD=your_app_password
-TWILIO_ACCOUNT_SID=your_twilio_sid
-TWILIO_AUTH_TOKEN=your_twilio_token
-TWILIO_PHONE_NUMBER=your_twilio_phone
-\`\`\`
+```bash
+  cd backend
+  source ../besafe/bin/activate
+  python app.py
+```
 
-### MongoDB Atlas Setup
-
-1. Create a MongoDB Atlas cluster
-2. Enable Vector Search on your cluster
-3. Create a database named `findsafety`
-4. The application will automatically create the required collections and indexes
-
-### Running the Application
-
-1. Start the Flask API:
-\`\`\`bash
-python app.py
-\`\`\`
-
-2. Import sample data:
-\`\`\`bash
-python data_ingestion.py
-\`\`\`
-
-3. Start the alert processor (in a separate terminal):
-\`\`\`bash
-python alert_processor.py
-\`\`\`
-
-## API Endpoints
-
-### Crime Data
-- `GET /api/crimes` - Get crimes with filtering
-- `POST /api/crimes/search` - Vector search for crimes
-- `GET /api/crimes/stats` - Get crime statistics
-- `GET /api/crimes/trends` - Get crime trends over time
-- `GET /api/crimes/heatmap` - Get heatmap data
-
-### AI Chat
-- `POST /api/chat` - Chat with AI about crime data
-
-### Alerts
-- `GET /api/alerts` - Get user alerts
-- `POST /api/alerts` - Create new alert
-- `PUT /api/alerts/<id>` - Update alert
-- `DELETE /api/alerts/<id>` - Delete alert
-
-### Data Management
-- `POST /api/data/import` - Import crime data
-
-## Vector Search
-
-The application uses MongoDB Atlas Vector Search for semantic crime data queries. Crime descriptions are automatically converted to vector embeddings using the `sentence-transformers` library.
-
-### Search Index Configuration
-
-The vector search index is automatically created with the following configuration:
-\`\`\`json
-{
-  "fields": [
-    {
-      "type": "vector",
-      "path": "description_vector",
-      "numDimensions": 384,
-      "similarity": "cosine"
-    }
-  ]
-}
-\`\`\`
-
-## Alert System
-
-The alert processor runs as a separate service and:
-- Monitors for new crimes matching user alert criteria
-- Sends email and SMS notifications
-- Supports immediate, daily, and weekly alert frequencies
-- Calculates geographic proximity using the Haversine formula
-
-## Deployment
-
-### Using Docker
-
-1. Build and run with Docker Compose:
-\`\`\`bash
-docker-compose up --build
-\`\`\`
-
-### Manual Deployment
-
-1. Install dependencies on your server
-2. Configure environment variables
-3. Use a WSGI server like Gunicorn:
-\`\`\`bash
-gunicorn --bind 0.0.0.0:5000 --workers 4 app:app
-\`\`\`
-
-## Data Sources
-
-The application is designed to work with:
-- South African Police Service (SAPS) crime data
-- Municipal crime statistics
-- Community policing forum reports
-
-For demonstration purposes, the `data_ingestion.py` script generates realistic mock data.
-
-## Security Considerations
-
-- API keys and database credentials are stored in environment variables
-- CORS is configured for frontend domains
-- Input validation and sanitization
-- Rate limiting should be implemented for production use
+## Technologies Used
+- Frontend: Next.js, React, Tailwind CSS
+- Backend: Flask, Python
+- Database: Firebase
+- Other Tools: Docker, Hugging Face Transformers, OpenAI API
 
 ## Contributing
+Contributions are welcome! Please follow these steps:
 
-1. Follow PEP 8 style guidelines
-2. Add tests for new features
-3. Update documentation for API changes
-4. Ensure environment variables are documented
+1. Fork the repository.
+2. Create a new branch for your feature or bug fix.
+3. Submit a pull request.
