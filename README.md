@@ -56,7 +56,7 @@ The project is organized into the following main directories:
     cd besafe
     source bin/activate
     pip install -r requirements.txt
-  ```
+   ```
 
 3. Configure environment variables:
    ```bash
