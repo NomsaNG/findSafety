@@ -23,6 +23,9 @@ from auth import (
     require_auth
 )
 
+# Import data ingestion module
+from data_ingestion import read_police_stations
+
 # Load environment variables
 load_dotenv()
 
@@ -525,7 +528,7 @@ def get_heatmap_data():
         # Format for heatmap
         heatmap_data = []
         for crime in crimes:
-            print("Processing Crime:", crime)  # Log each crime being processed
+            # print(":", crime)  # Log each crime being processed
             if 'location' in crime and 'lat' in crime['location'] and 'lng' in crime['location']:
                 # Weight based on severity
                 weight = 1
@@ -542,8 +545,8 @@ def get_heatmap_data():
                     "severity": crime.get('severity'),
                     "date": crime.get('date')
                 })
-        print("Query:", query)  # Log the query
-        print("Heatmap Data:", heatmap_data)  # Log the heatmap data
+        # print("Query:", query)  # Log the query
+        # print("Heatmap Data:", heatmap_data)  # Log the heatmap data
         return jsonify({
             "heatmap_data": heatmap_data,
             "total_points": len(heatmap_data),
@@ -791,6 +794,24 @@ def import_crime_data():
         else:
             return jsonify({"message": "No crimes to import"})
     
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/police-stations', methods=['GET'])
+def get_police_stations():
+    """API endpoint to fetch police station data"""
+    try:
+        police_stations = read_police_stations("../Police_points.xlsx")
+        print(f"Retrieved {len(police_stations)} police stations") 
+        # print the first 5 stations for debugging
+        print("Sample police stations:", police_stations[:5])
+       
+        return jsonify({
+            "stations": police_stations,  # Updated key
+            "total": len(police_stations)
+        })
+
+        
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

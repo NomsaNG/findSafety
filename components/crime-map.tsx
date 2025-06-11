@@ -196,19 +196,19 @@ export function CrimeMap() {
         })
 
         // Add cluster layer
-        map.current.addLayer({
-          id: "crimes-clusters",
-          type: "circle",
-          source: "crimes",
-          filter: ["has", "point_count"],
-          paint: {
-            "circle-color": ["step", ["get", "point_count"], "#51bbd6", 10, "#f1f075", 30, "#f28cb1"],
-            "circle-radius": ["step", ["get", "point_count"], 20, 10, 30, 30, 40],
-          },
-          layout: {
-            visibility: mapLayers.find((layer) => layer.id === "clusters")?.checked ? "visible" : "none",
-          },
-        })
+        // map.current.addLayer({
+        //   id: "crimes-clusters",
+        //   type: "circle",
+        //   source: "crimes",
+        //   filter: ["has", "point_count"],
+        //   paint: {
+        //     "circle-color": ["step", ["get", "point_count"], "#51bbd6", 10, "#f1f075", 30, "#f28cb1"],
+        //     "circle-radius": ["step", ["get", "point_count"], 20, 10, 30, 30, 40],
+        //   },
+        //   layout: {
+        //     visibility: mapLayers.find((layer) => layer.id === "clusters")?.checked ? "visible" : "none",
+        //   },
+        // })
 
         // Add cluster count layer
         map.current.addLayer({
@@ -247,6 +247,21 @@ export function CrimeMap() {
         },
       })
 
+     //Add police stations layer
+      // map.current.addLayer({
+      //   id: "police-stations-points",
+      //   type: "circle",
+      //   source: "stations",
+      //   paint: {
+      //     "circle-radius": 8,
+      //     "circle-color": "#0000FF",
+      //     "circle-opacity": 0.8,
+      //   },
+      //   layout: {
+      //     visibility: mapLayers.find((layer) => layer.id === "police")?.checked ? "visible" : "none",
+      //   },
+      // });
+
 
       toast({
         title: "Map updated",
@@ -263,6 +278,75 @@ export function CrimeMap() {
       setLoading(false)
     }
   }
+
+  // Add function to fetch police station data
+  const loadPoliceStationData = async () => {
+    if (!map.current || !loaded) return;
+
+    try {
+      const response = await crimeAPI.getPoliceStations();
+
+      console.log("Police stations API response:", response);
+      const geojson = {
+        type: "FeatureCollection", // Explicitly set the type
+        features: response.stations.map((station) => ({
+          type: "Feature",
+          properties: {
+            name: station.name,
+            address: `${station.latitude}, ${station.longitude}`,
+          },
+          geometry: {
+            type: "Point",
+            coordinates: [station.latitude, station.longitude], 
+          },
+        })),
+      };
+      console.log("Target police station name:", response.stations[0]?.name);
+      console.log("Target police station coordinates:", response.stations[0]?.latitude, response.stations[0]?.longitude);
+
+      console.log("Police stations GeoJSON data after mapping:", geojson);
+
+      if (map.current.getSource("police-stations")) {
+        const source = map.current.getSource("police-stations") as mapboxgl.GeoJSONSource;
+        source.setData(geojson as any);
+      } else {
+        map.current.addSource("police-stations", {
+          type: "geojson",
+          data: geojson,
+        });
+
+        map.current.addLayer({
+          id: "police-stations-points",
+          type: "circle",
+          source: "police-stations",
+          paint: {
+            "circle-radius": 5,
+            "circle-color": "#0000FF",
+            "circle-opacity": 0.8,
+          },
+          layout: {
+            visibility: mapLayers.find((layer) => layer.id === "police")?.checked ? "visible" : "none",
+          },
+        });
+      }
+
+      const policeStationsSource = map.current.getSource("police-stations");
+      if (policeStationsSource) {
+        console.log("Police stations GeoJSON data:", (policeStationsSource as mapboxgl.GeoJSONSource)._data);
+      } else {
+        console.log("Police stations source is undefined.");
+      }
+      console.log("Map bounds:", map.current.getBounds());
+      console.log("Map zoom level:", map.current.getZoom());
+    } catch (error) {
+      console.error("Error loading police station data:", error);
+      toast({
+        title: "Error loading data",
+        description: "Could not load police station data",
+        variant: "destructive",
+      });
+    }
+  };
 
   // Initialize map
   useEffect(() => {
@@ -323,6 +407,13 @@ export function CrimeMap() {
     }
   }, [loaded])
 
+  // Call the function to load police station data
+  useEffect(() => {
+    if (loaded) {
+      loadPoliceStationData();
+    }
+  }, [loaded]);
+
   // Update heatmap intensity
   useEffect(() => {
     if (loaded && map.current && map.current.getLayer("crimes-heat")) {
@@ -335,7 +426,7 @@ export function CrimeMap() {
     if (!loaded || !map.current) return
 
     const heatmapLayer = mapLayers.find((layer) => layer.id === "heatmap")
-    const clustersLayer = mapLayers.find((layer) => layer.id === "clusters")
+    const policeLayer = mapLayers.find((layer) => layer.id === "police")
     const pointsLayer = mapLayers.find((layer) => layer.id === "points")
 
     console.log("Heatmap visibility:", heatmapLayer?.checked)
@@ -343,11 +434,12 @@ export function CrimeMap() {
     if (map.current.getLayer("crimes-heat")) {
       map.current.setLayoutProperty("crimes-heat", "visibility", heatmapLayer?.checked ? "visible" : "none")
     }
-
-    if (map.current.getLayer("crimes-clusters")) {
-      map.current.setLayoutProperty("crimes-clusters", "visibility", clustersLayer?.checked ? "visible" : "none")
-
-      map.current.setLayoutProperty("crimes-cluster-count", "visibility", clustersLayer?.checked ? "visible" : "none")
+    
+    console.log("Police stations visibility:", policeLayer?.checked);
+    console.log("Police stations layer exists:", map.current.getLayer("police-stations-points"));
+    console.log("Police stations source exists:", map.current.getSource("police-stations"));
+    if (map.current.getLayer("police-stations-points")) {
+      map.current.setLayoutProperty("police-stations-points", "visibility", policeLayer?.checked ? "visible" : "none");
     }
 
     if (map.current.getLayer("crimes-points")) {

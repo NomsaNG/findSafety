@@ -81,6 +81,7 @@ class CrimeScraper:
         
         # News sources
         self.news_sources = [
+            'https://www.statssa.gov.za/?cat=26',
             'https://www.news24.com',
             'https://www.iol.co.za',
             'https://www.timeslive.co.za',

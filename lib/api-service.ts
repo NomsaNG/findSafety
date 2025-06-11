@@ -163,6 +163,18 @@ export const crimeAPI = {
       total_points: number
     }>(`/crimes/heatmap?${queryParams.toString()}`)
   },
+
+  // Add method to fetch police station data
+  getPoliceStations: async () => {
+    return fetchAPI<{
+      stations: {
+        name: string
+        address: string
+        lat: number
+        lng: number
+      }[]
+    }>("/police-stations")
+  },
 }
 
 /**
