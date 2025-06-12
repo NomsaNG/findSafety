@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyDNKVBtTlUtQ8WF06gmrAtFpiICkHh9CUs",
   authDomain: "findsafety-c108d.firebaseapp.com",
   projectId: "findsafety-c108d",
