@@ -1,21 +1,21 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import { Shield, LogOut } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { ModeToggle } from "./mode-toggle"
-import { Button } from "./ui/button"
-import { ApiStatusIndicator } from "./api-status-indicator"
-import { authAPI } from "@/lib/auth-service"
+import Link from "next/link";
+import { Shield, LogOut } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { ModeToggle } from "./mode-toggle";
+import { Button } from "./ui/button";
+import { ApiStatusIndicator } from "./api-status-indicator";
+import { authAPI } from "@/lib/auth-service";
 
 interface MainNavProps {
-  className?: string
+  className?: string;
 }
 
 export function MainNav({ className }: MainNavProps) {
   const handleSignOut = () => {
-    authAPI.logout()
-  }
+    authAPI.logout();
+  };
 
   return (
     <div className={cn("flex items-center space-x-4 lg:space-x-6", className)}>
@@ -29,6 +29,9 @@ export function MainNav({ className }: MainNavProps) {
         </Link>
         <Link href="/dashboard/explore" className="text-sm font-medium transition-colors hover:text-primary">
           Explore
+        </Link>
+        <Link href="/dashboard/community" className="text-sm font-medium transition-colors hover:text-primary">
+          Community
         </Link>
         <Link href="/dashboard/chat" className="text-sm font-medium transition-colors hover:text-primary">
           Chat
@@ -46,5 +49,5 @@ export function MainNav({ className }: MainNavProps) {
         </Button>
       </div>
     </div>
-  )
+  );
 }
