@@ -30,7 +30,8 @@ from data_ingestion import read_police_stations
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=["https://find-safety-90nitdmzg-natashas-projects-cb323fc8.vercel.app"])
+
 
 # MongoDB Atlas connection
 MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb+srv://nomsa:simplepassword@cluster0.obnp1dw.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0')
