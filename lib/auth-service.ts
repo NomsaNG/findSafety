@@ -3,7 +3,7 @@
  * Handles user authentication and token management
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || " https://findsafety-302256036189.us-central1.run.app"
 
 /**
  * Check if localStorage is available (browser environment)

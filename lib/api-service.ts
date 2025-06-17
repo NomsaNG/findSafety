@@ -5,7 +5,7 @@
 
 // Use the API proxy in development to avoid CORS issues
 const useApiProxy = false;
-const API_BASE_URL = useApiProxy ? "/api/proxy" : process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"
+const API_BASE_URL = useApiProxy ? "/api/proxy" : process.env.NEXT_PUBLIC_API_URL || " https://findsafety-302256036189.us-central1.run.app"
 
 /**
  * Generic fetch wrapper with error handling and authentication

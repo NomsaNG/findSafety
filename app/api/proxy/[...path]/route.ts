@@ -6,7 +6,7 @@ export async function GET(request: NextRequest, context: { params: { path: strin
   const path = params.path.join("/");
   const queryString = request.nextUrl.search;
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || " https://findsafety-302256036189.us-central1.run.app";
 
   try {
     const response = await fetch(`${apiUrl}/${path}${queryString}`, {
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest, context: { params: { path: stri
   const { params } = context;
   const path = params.path.join("/");
   const queryString = request.nextUrl.search;
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || " https://findsafety-302256036189.us-central1.run.app";
 
   try {
     const body = await request.json();
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest, context: { params: { path: stri
 export async function PUT(request: NextRequest, context: { params: { path: string[] } }) {
   const { params } = context;
   const path = params.path.join("/");
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || " https://findsafety-302256036189.us-central1.run.app";
 
   try {
     const body = await request.json();
@@ -89,7 +89,7 @@ export async function PUT(request: NextRequest, context: { params: { path: strin
 export async function DELETE(request: NextRequest, context: { params: { path: string[] } }) {
   const { params } = context;
   const path = params.path.join("/");
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || " https://findsafety-302256036189.us-central1.run.app";
 
   try {
     const response = await fetch(`${apiUrl}/${path}`, {
