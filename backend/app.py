@@ -827,7 +827,6 @@ def get_police_stations():
 
 if __name__ == '__main__':
     # Create search indexes on startup
-    create_search_indexes()
     
     # Run the Flask app
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=8080)
