@@ -1,198 +1,360 @@
-'use client';
+"use client"
 
-interface Post {
-  id: string;
-  author: string;
-  date: string;
-  tags?: string[];
-  title: string;
-  details: string;
-}
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
+import { Search, Plus, Phone, AlertTriangle, ThumbsUp, Shield, Filter, Clock } from "lucide-react"
+import { CommunityAlertForm } from "@/components/community-alert-form"
+import { ReportToPoliceDialog } from "@/components/report-to-police-dialog"
+import { LocationFilter } from "@/components/location-filter"
+import { SafetyTipsSection } from "@/components/safety-tips-section"
+import { CommunityPost } from "@/components/community-post"
+import { useToast } from "@/components/ui/use-toast"
+import { useAuthGuard } from "@/lib/auth-service"
 
-import { useEffect, useState } from 'react';
-import { getFirestore, collection, getDocs, addDoc, onSnapshot } from 'firebase/firestore';
-import { initializeApp } from 'firebase/app';
-import { firebaseConfig } from '../../../lib/firebase';
-import { useAuth } from '../../../hooks/useAuth';
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+// Mock community posts data
+const mockCommunityPosts = [
+  {
+    id: "1",
+    user: {
+      name: "Sarah M.",
+      avatar: "",
+      verified: true,
+    },
+    type: "Armed Robbery",
+    location: {
+      address: "Sandton City Mall, Johannesburg",
+      coordinates: { lat: -26.1052, lng: 28.056 },
+    },
+    description:
+      "Two suspects approached me in the parking garage around 6 PM. They demanded my phone and wallet. Security arrived quickly but suspects fled. Be extra careful in the lower levels.",
+    timestamp: "2 hours ago",
+    media: [],
+    interactions: {
+      upvotes: 12,
+      comments: 5,
+      flags: 0,
+    },
+    severity: "High",
+    verified: false,
+  },
+  {
+    id: "2",
+    user: {
+      name: "Mike K.",
+      avatar: "",
+      verified: false,
+    },
+    type: "Suspicious Activity",
+    location: {
+      address: "Rosebank, Johannesburg",
+      coordinates: { lat: -26.1467, lng: 28.0436 },
+    },
+    description:
+      "Noticed someone trying car door handles on Oxford Road around 2 AM. Called security but person disappeared. Residents should lock their cars properly.",
+    timestamp: "5 hours ago",
+    media: [],
+    interactions: {
+      upvotes: 8,
+      comments: 3,
+      flags: 0,
+    },
+    severity: "Medium",
+    verified: true,
+  },
+  {
+    id: "3",
+    user: {
+      name: "Lisa P.",
+      avatar: "",
+      verified: true,
+    },
+    type: "Vehicle Theft",
+    location: {
+      address: "Melville, Johannesburg",
+      coordinates: { lat: -26.1875, lng: 28.0103 },
+    },
+    description:
+      "My car was stolen from 7th Street this morning. White Toyota Corolla, license plate CA 123 GP. Please keep an eye out. Case opened at Brixton Police Station.",
+    timestamp: "1 day ago",
+    media: [],
+    interactions: {
+      upvotes: 24,
+      comments: 8,
+      flags: 0,
+    },
+    severity: "High",
+    verified: true,
+  },
+]
 
 export default function CommunityPage() {
-  const [title, setTitle] = useState('');
-  const [details, setDetails] = useState('');
-  const [posts, setPosts] = useState<Post[]>([]); // Typed with Post interface
-  const { user, loading } = useAuth();
-  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("")
+  const [selectedLocation, setSelectedLocation] = useState("")
+  const [showAlertForm, setShowAlertForm] = useState(false)
+  const [showPoliceReport, setShowPoliceReport] = useState(false)
+  const [posts, setPosts] = useState(mockCommunityPosts)
+  const [filteredPosts, setFilteredPosts] = useState(mockCommunityPosts)
+  const [activeTab, setActiveTab] = useState("recent")
+  const { toast } = useToast()
 
+  // Protect the route
+  const isAuthenticated = useAuthGuard()
+
+  // Filter posts based on search and location
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'community-posts'), (snapshot) => {
-      try {
-        const postData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-        } as Post));
-        setPosts(postData);
-      } catch (error) {
-        console.error('Error updating posts:', error);
-        setError('Failed to update community posts. Please try again later.');
-      }
-    }, (error) => {
-      console.error('Snapshot error:', error);
-      setError('Failed to connect to community posts. Please check your connection.');
-    });
+    let filtered = posts
 
-    return () => unsubscribe();
-  }, []);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim() || !details.trim()) {
-      alert('Please fill in both title and details.');
-      return;
+    // Search filter
+    if (searchQuery.trim()) {
+      filtered = filtered.filter(
+        (post) =>
+          post.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          post.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          post.location.address.toLowerCase().includes(searchQuery.toLowerCase()),
+      )
     }
-    try {
-      await addDoc(collection(db, 'community-posts'), {
-        title,
-        details,
-        author: 'Anonymous',
-        date: new Date().toISOString(),
-        tags: ['burglary', 'suspicious-activity', 'neighborhood-watch'],
-      });
-      setTitle('');
-      setDetails('');
-      alert('Post created successfully!');
-    } catch (error) {
-      console.error('Error creating post:', error);
-      alert('Failed to create post.');
+
+    // Location filter
+    if (selectedLocation.trim()) {
+      filtered = filtered.filter((post) => post.location.address.toLowerCase().includes(selectedLocation.toLowerCase()))
     }
-  };
 
-  const handleShare = (post: Post) => {
-    const shareUrl = window.location.origin + '/dashboard/community';
-    const shareText = `${post.title}\n${post.details}\nCheck it out: ${shareUrl}`;
-    
-    if (navigator.share) {
-      navigator.share({
-        title: post.title,
-        text: shareText,
-        url: shareUrl,
-      }).catch(error => console.error('Error sharing:', error));
-    } else {
-      const encodedText = encodeURIComponent(shareText);
-      const platformChoices = [
-        { name: 'WhatsApp', url: `whatsapp://send?text=${encodedText}` },
-        { name: 'Twitter/X', url: `https://twitter.com/intent/tweet?text=${encodedText}` },
-        { name: 'Facebook', url: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}` },
-        { name: 'LinkedIn', url: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}` },
-      ];
+    // Sort by tab selection
+    if (activeTab === "recent") {
+      filtered.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    } else if (activeTab === "popular") {
+      filtered.sort((a, b) => b.interactions.upvotes - a.interactions.upvotes)
+    } else if (activeTab === "verified") {
+      filtered = filtered.filter((post) => post.verified)
+    }
 
-      platformChoices.forEach(platform => {
-        if (confirm(`Share on ${platform.name}?`)) {
-          window.open(platform.url, '_blank');
+    setFilteredPosts(filtered)
+  }, [searchQuery, selectedLocation, posts, activeTab])
+
+  const handleNewAlert = (alertData: any) => {
+    const newPost = {
+      id: Date.now().toString(),
+      user: {
+        name: "You",
+        avatar: "",
+        verified: false,
+      },
+      type: alertData.crimeType,
+      location: {
+        address: alertData.location,
+        coordinates: { lat: 0, lng: 0 }, // Would be geocoded in real app
+      },
+      description: alertData.description,
+      timestamp: "Just now",
+      media: alertData.media || [],
+      interactions: {
+        upvotes: 0,
+        comments: 0,
+        flags: 0,
+      },
+      severity: alertData.severity || "Medium",
+      verified: false,
+    }
+
+    setPosts([newPost, ...posts])
+    setShowAlertForm(false)
+
+    toast({
+      title: "Community Alert Posted",
+      description: "Your alert has been shared with the community. Thank you for keeping everyone informed.",
+    })
+  }
+
+  const handlePostInteraction = (postId: string, action: "upvote" | "comment" | "flag") => {
+    setPosts(
+      posts.map((post) => {
+        if (post.id === postId) {
+          const updatedPost = { ...post }
+          if (action === "upvote") {
+            updatedPost.interactions.upvotes += 1
+          } else if (action === "comment") {
+            updatedPost.interactions.comments += 1
+          } else if (action === "flag") {
+            updatedPost.interactions.flags += 1
+          }
+          return updatedPost
         }
-      });
-    }
-  };
+        return post
+      }),
+    )
 
-  if (error) {
-    return (
-      <div className="flex h-64 items-center justify-center bg-background text-foreground text-red-500">
-        {error}
-      </div>
-    );
+    if (action === "upvote") {
+      toast({
+        title: "Post upvoted",
+        description: "Thank you for validating this community alert.",
+      })
+    } else if (action === "flag") {
+      toast({
+        title: "Post flagged",
+        description: "Thank you for helping maintain community standards.",
+      })
+    }
+  }
+
+  if (!isAuthenticated) {
+    return null
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {/* Header */}
-      <header className="bg-[--primary] text-[--primary-foreground] text-center py-6">
-        <h1 className="text-3xl font-bold">Community Safety Hub</h1>
-        <p className="mt-2">Connect with neighbors, share safety concerns, and work together to make your community safer</p>
-      </header>
-
-      {/* Main Content */}
-      <div className="container mx-auto p-4 flex flex-col lg:flex-row gap-6">
-        {/* Post Creation Form */}
-        <div className="w-full lg:w-2/3 bg-card p-4 rounded shadow">
-          <h2 className="text-xl font-bold mb-4 text-[--primary]">Create a Post</h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Title"
-              className="w-full p-2 border border-[--border] rounded bg-[--input] text-foreground"
-              required
-            />
-            <textarea
-              value={details}
-              onChange={(e) => setDetails(e.target.value)}
-              placeholder="Describe what you've observed..."
-              className="w-full p-2 border border-[--border] rounded bg-[--input] text-foreground h-32"
-              required
-            />
-            <button
-              type="submit"
-              className="w-full p-2 bg-[--primary] text-[--primary-foreground] border border-[--border] rounded-none hover:bg-[--primary]/90"
-            >
-              Post to Community
-            </button>
-          </form>
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 py-6 max-w-7xl">
+        {/* Header */}
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-primary">Community Safety</h1>
+            <p className="text-muted-foreground">Share alerts, stay informed, and keep your community safe</p>
+          </div>
+          <div className="flex gap-3">
+            <Button onClick={() => setShowPoliceReport(true)} variant="outline" className="gap-2">
+              <Phone className="h-4 w-4" />
+              Report to Police
+            </Button>
+            <Button onClick={() => setShowAlertForm(true)} className="gap-2">
+              <Plus className="h-4 w-4" />
+              Post Alert
+            </Button>
+          </div>
         </div>
 
-        {/* Local Safety Resources Sidebar */}
-        <aside className="w-full lg:w-1/3 bg-card p-4 rounded shadow">
-          <h2 className="text-xl font-bold mb-4 text-[--primary]">Local Safety Resources</h2>
-          <ul className="space-y-2">
-            <li className="flex items-center">
-              <span className="text-[--destructive] mr-2">⭕</span>
-              <a href="#" className="text-[--destructive] hover:underline">Police Department Contacts</a>
-            </li>
-            <li className="flex items-center">
-              <span className="text-[--alert-green] mr-2">📞</span>
-              <a href="#" className="text-[--alert-green] hover:underline">Emergency Numbers</a>
-            </li>
-            <li className="flex items-center">
-              <span className="text-[--alert-yellow] mr-2">📊</span>
-              <a href="#" className="text-[--alert-yellow] hover:underline">Crime Statistics</a>
-            </li>
-          </ul>
-        </aside>
-      </div>
+        <div className="grid gap-6 lg:grid-cols-12">
+          {/* Sidebar */}
+          <div className="lg:col-span-3 space-y-6">
+            {/* Search */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Search className="h-5 w-5" />
+                  Search Posts
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Input
+                  placeholder="Search by crime type, location..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full"
+                />
+              </CardContent>
+            </Card>
 
-      {/* Recent Community Posts */}
-      <div className="container mx-auto p-4 mt-6">
-        <h2 className="text-xl font-bold mb-4 text-[--alert-green]">Recent Community Posts</h2>
-        <div className="space-y-4">
-          {posts.map(post => (
-            <div key={post.id} className="bg-[--muted] p-4 rounded-lg shadow border border-[--border]">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <div className="w-10 h-10 bg-[--border] rounded-full mr-2"></div> {/* Profile picture placeholder */}
-                  <div>
-                    <p className="font-semibold">{post.author}</p>
-                    <p className="text-sm text-[--muted-foreground]">3 hours ago - {post.tags?.join(', ') || ''}</p>
+            {/* Location Filter */}
+            <LocationFilter selectedLocation={selectedLocation} onLocationChange={setSelectedLocation} />
+
+            {/* Safety Tips */}
+            <SafetyTipsSection />
+
+            {/* Quick Stats */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg">Community Stats</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Active Alerts</span>
+                  <Badge variant="secondary">{posts.length}</Badge>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Verified Posts</span>
+                  <Badge variant="secondary">{posts.filter((p) => p.verified).length}</Badge>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">This Week</span>
+                  <Badge variant="secondary">12</Badge>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Main Content */}
+          <div className="lg:col-span-9">
+            <Card className="h-fit">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-xl">Community Alerts</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Filter className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">
+                      {filteredPosts.length} of {posts.length} posts
+                    </span>
                   </div>
                 </div>
-                <span className="text-[--alert-green] text-sm">4 Supports</span> {/* Placeholder support count */}
-              </div>
-              <h3 className="mt-2 text-lg font-medium text-[--primary]">{post.title}</h3>
-              <p className="text-[--muted-foreground] mt-1">{post.details}</p>
-              <div className="flex items-center mt-4 space-x-4 text-sm text-[--muted-foreground]">
-                <button className="hover:underline">12 Comments</button>
-                <button className="hover:underline">Supports</button>
-                <button
-                  className="hover:underline"
-                  onClick={() => handleShare(post)}
-                >
-                  Share
-                </button>
-              </div>
-            </div>
-          ))}
+              </CardHeader>
+              <CardContent>
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                  <TabsList className="grid w-full grid-cols-3 mb-6">
+                    <TabsTrigger value="recent" className="gap-2">
+                      <Clock className="h-4 w-4" />
+                      Recent
+                    </TabsTrigger>
+                    <TabsTrigger value="popular" className="gap-2">
+                      <ThumbsUp className="h-4 w-4" />
+                      Popular
+                    </TabsTrigger>
+                    <TabsTrigger value="verified" className="gap-2">
+                      <Shield className="h-4 w-4" />
+                      Verified
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="recent" className="mt-0">
+                    <div className="space-y-6">
+                      {filteredPosts.length === 0 ? (
+                        <div className="text-center py-12">
+                          <AlertTriangle className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                          <h3 className="text-xl font-medium mb-2">No alerts found</h3>
+                          <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                            {searchQuery || selectedLocation
+                              ? "Try adjusting your search or location filters to see more results"
+                              : "Be the first to share a community alert and help keep everyone informed"}
+                          </p>
+                          <Button onClick={() => setShowAlertForm(true)} size="lg">
+                            <Plus className="h-4 w-4 mr-2" />
+                            Post First Alert
+                          </Button>
+                        </div>
+                      ) : (
+                        filteredPosts.map((post) => (
+                          <CommunityPost key={post.id} post={post} onInteraction={handlePostInteraction} />
+                        ))
+                      )}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="popular" className="mt-0">
+                    <div className="space-y-6">
+                      {filteredPosts.map((post) => (
+                        <CommunityPost key={post.id} post={post} onInteraction={handlePostInteraction} />
+                      ))}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="verified" className="mt-0">
+                    <div className="space-y-6">
+                      {filteredPosts.map((post) => (
+                        <CommunityPost key={post.id} post={post} onInteraction={handlePostInteraction} />
+                      ))}
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+          </div>
         </div>
+
+        {/* Dialogs */}
+        <CommunityAlertForm open={showAlertForm} onOpenChange={setShowAlertForm} onSubmit={handleNewAlert} />
+
+        <ReportToPoliceDialog open={showPoliceReport} onOpenChange={setShowPoliceReport} />
       </div>
     </div>
-  );
+  )
 }
