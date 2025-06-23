@@ -8,7 +8,6 @@ import os
 from dotenv import load_dotenv
 # import openai
 
-from sentence_transformers import SentenceTransformer
 import numpy as np
 from bson import ObjectId
 import json
@@ -118,6 +117,7 @@ def create_search_indexes():
         print(f"Error creating search indexes: {e}")
 
 def generate_embedding(text: str) -> List[float]:
+    from sentence_transformers import SentenceTransformer
     """Generate vector embedding for text using sentence transformer"""
     embedding = model.encode(text)
     return embedding.tolist()
