@@ -1,4 +1,4 @@
-print("Before imports...")
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pymongo import MongoClient
@@ -7,8 +7,7 @@ from datetime import datetime, timedelta, timezone
 import os
 from dotenv import load_dotenv
 # import openai
-from google import genai
-from google.generativeai import GenerativeModel
+
 from sentence_transformers import SentenceTransformer
 import numpy as np
 from bson import ObjectId
@@ -27,14 +26,7 @@ from auth import (
 # Import data ingestion module
 from data_ingestion import read_police_stations
 
-try:
-    import google.generativeai
-except Exception as e:
-    import traceback
-    print("Error importing google.generativeai:", e)
-    traceback.print_exc()
 
-print("After imports...")
 # Load environment variables
 load_dotenv()
 
@@ -568,6 +560,8 @@ def get_heatmap_data():
 
 @app.route('/api/chat', methods=['POST'])
 def chat_with_ai():
+    from google import genai
+    from google.generativeai import GenerativeModel
     print("POST /api/chat called")  # Log the endpoint call
     try:
         print("Parsing request")
