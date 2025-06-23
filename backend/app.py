@@ -8,7 +8,8 @@ import os
 from dotenv import load_dotenv
 # import openai
 from sentence_transformers import SentenceTransformer
-
+from google import genai
+from google.generativeai import GenerativeModel
 import numpy as np
 from bson import ObjectId
 import json
@@ -118,7 +119,6 @@ def create_search_indexes():
         print(f"Error creating search indexes: {e}")
 
 def generate_embedding(text: str) -> List[float]:
-    from sentence_transformers import SentenceTransformer
     """Generate vector embedding for text using sentence transformer"""
     embedding = model.encode(text)
     return embedding.tolist()
@@ -561,8 +561,7 @@ def get_heatmap_data():
 
 @app.route('/api/chat', methods=['POST'])
 def chat_with_ai():
-    from google import genai
-    from google.generativeai import GenerativeModel
+    
     print("POST /api/chat called")  # Log the endpoint call
     try:
         print("Parsing request")
