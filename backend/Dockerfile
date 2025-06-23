@@ -2,21 +2,22 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
+# Install build tools and upgrade pip
+RUN apt-get update && apt-get install -y gcc g++ \
+ && pip install --upgrade pip
 
-# Copy requirements and install Python dependencies
+# Copy requirements and install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Remove build tools (optional cleanup)
+RUN apt-get remove -y gcc g++ \
+ && apt-get autoremove -y \
+ && rm -rf /var/lib/apt/lists/*
 
 # Copy application code
 COPY . .
 
-# Expose port
 EXPOSE 8080
 
-# Run the application
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "4", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--timeout", "90", "app:app"]
