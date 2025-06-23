@@ -370,7 +370,7 @@ export function CrimeMap() {
       map.current.on("load", () => {
         console.log("Map loaded")
         setLoaded(true)
-        // loadHeatmapData()
+        loadHeatmapData()
       })
 
 
