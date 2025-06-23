@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 import os
 from dotenv import load_dotenv
 # import openai
+from sentence_transformers import SentenceTransformer
 
 import numpy as np
 from bson import ObjectId
