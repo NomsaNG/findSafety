@@ -51,12 +51,12 @@ model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
 # OpenAI API key for chat functionality
 gemini_key = os.getenv('GEMINI_API_KEY')
 if not gemini_key:
-        print("⚠️ GEMINI_API_KEY not found!")
+    print("⚠ GEMINI_API_KEY not found!")
     import google.generativeai as genai
     client = genai.Client(api_key=gemini_key)
-    print("✅ Gemini client created")
+    print(" Gemini client created")
 except Exception as e:
-    print("❌ Gemini client error:", e)
+    print(" Gemini client error:", e)
 
 client = genai.Client(api_key=gemini_key)
 
